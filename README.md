@@ -89,3 +89,11 @@ n8n (self-hosted), Google Sheets, Gmail API, Groq (LLM), JavaScript.
 
 ![Workflow](screenshots/workflow.png)
 ![Approval email](screenshots/approval-email.png)
+
+*Approval email (a human approves or rejects the draft):*
+
+![Approval email](screenshots/approval-email.png)
+
+*Reminder received by the client after approval:*
+
+![Client email](screenshots/client-email.png)
