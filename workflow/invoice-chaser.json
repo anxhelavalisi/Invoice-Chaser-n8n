@@ -1,0 +1,524 @@
+{
+  "name": "Invoice Chaser",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "48fca6a1-9305-4575-a629-34524111d5b8",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1cof5e8-Z86ENfIgaFgABGfM75tD5sHXExTTNV4OxH48",
+          "mode": "list",
+          "cachedResultName": "Finance Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cof5e8-Z86ENfIgaFgABGfM75tD5sHXExTTNV4OxH48/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1432028694,
+          "mode": "list",
+          "cachedResultName": "invoices",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cof5e8-Z86ENfIgaFgABGfM75tD5sHXExTTNV4OxH48/edit#gid=1432028694"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        0
+      ],
+      "id": "5cae1993-8b43-46a2-af24-96917048e135",
+      "name": "Get row(s) in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MiBzFZ0B8TB7ywdR",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ---- Settings ----\nconst TODAY = '2026-10-11';   // vendos null për datën reale\nconst SOFT_MAX = 7;           // 1-7 ditë vonesë: kujtesë e butë\nconst FIRM_MAX = 30;          // 8-30 ditë: më e prerë, mbi 30: përfundimtare\nconst MIN_GAP = 7;            // mos e kujto më shpesh se çdo 7 ditë\n\nconst toDay = (s) => Math.floor(new Date(String(s).slice(0, 10) + 'T00:00:00Z').getTime() / 86400000);\nconst today = TODAY ? toDay(TODAY) : Math.floor(Date.now() / 86400000);\n\nconst out = [];\nfor (const item of $input.all()) {\n  const r = item.json;\n  if (r.status === 'Paid') continue;\n\n  const daysLate = today - toDay(r.due_date);\n  if (daysLate <= 0) continue;                       // ende pa skaduar\n\n  if (r.last_reminder_date) {\n    const since = today - toDay(r.last_reminder_date);\n    if (since < MIN_GAP) continue;                   // u kujtua së fundmi\n  }\n\n  const tone = daysLate <= SOFT_MAX ? 'soft' : daysLate <= FIRM_MAX ? 'firm' : 'final';\n\n  out.push({ json: {\n    invoice_id: r.invoice_id,\n    client: r.client,\n    client_email: r.client_email,\n    amount: r.amount,\n    due_date: r.due_date,\n    days_late: daysLate,\n    tone,\n    reminder_number: Number(r.reminder_count || 0) + 1,\n    today_str: TODAY || new Date().toISOString().slice(0, 10),\n  }});\n}\nreturn out;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "9a11d309-27f7-466a-bb4b-4c011b7ea5e9",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You write payment reminder emails for a small business called Demo Business Ltd.\nWrite ONLY the email body (no subject line). Sign off as \"Finance Team\".\n\nSTRICT RULES:\n- Use ONLY the facts below. Never invent amounts, dates, bank details, links, phone numbers or late fees.\n- Keep it under 110 words.\n- Plain, professional English.\n\nFACTS:\nClient: {{ $json.client }}\nInvoice number: {{ $json.invoice_id }}\nAmount due: {{ $json.amount }} EUR\nOriginal due date: {{ $json.due_date }}\nDays overdue: {{ $json.days_late }}\nReminder number: {{ $json.reminder_number }}\n\nTONE: {{ $json.tone }}\n- soft = friendly, assume it was simply overlooked\n- firm = polite but direct, ask for payment or a payment date within 5 days\n- final = formal final notice, state the invoice is seriously overdue and ask them to contact us immediately..\n- Do NOT mention legal action, collections, penalties, fees or service suspension.\n- Do NOT add deadlines unless the TONE section below asks for one.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        608,
+        -16
+      ],
+      "id": "6dd65b74-a733-41cc-a77e-14e5ddd30f2c",
+      "name": "Basic LLM Chain",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-20b",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        608,
+        208
+      ],
+      "id": "115421ad-834c-44f4-8567-4220bacd52f4",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "rbJ9YNirUZte9fe8",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "anxhela.valisi10@gmail.com",
+        "subject": "=Approve reminder for {{ $json.invoice_id }}",
+        "message": "={{ $json.text }}",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1008,
+        -240
+      ],
+      "id": "306a3a11-bba1-40fb-8fed-9d91fa32c127",
+      "name": "Send message and wait for response",
+      "webhookId": "2d21fe69-4641-4828-ae57-efba8322f3a1",
+      "retryOnFail": true,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EEKeM00P1uZMZ6wM",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "bdbb9d42-4830-4d73-b4f6-79f1b9edb894",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1312,
+        96
+      ],
+      "id": "8c0af76a-ad58-45ad-9d35-6f2ab0d10113",
+      "name": "If",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "sendTo": "anxhela.valisi10@gmail.com",
+        "subject": "=Payment reminder for {{ $('Loop Over Items').item.json.invoice_id }}",
+        "emailType": "text",
+        "message": "={{ $('Loop Over Items').item.json.text }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1392,
+        -160
+      ],
+      "id": "38d96c86-7a6d-414d-a21e-266022d70dc6",
+      "name": "Send a message",
+      "webhookId": "ddb79afa-b579-44a7-a0c2-469248dd9667",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "EEKeM00P1uZMZ6wM",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const invoices = $('Code in JavaScript').all();\nreturn $input.all().map((item, i) => ({\n  json: { ...invoices[i].json, text: item.json.text }\n}));\n  "
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        400
+      ],
+      "id": "897971e1-6695-40e0-8f0c-36accd2368b4",
+      "name": "Merge Invoice and Text"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1616,
+        352
+      ],
+      "id": "d86d0395-cc78-4c65-a34d-8c6d4091b07c",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1cof5e8-Z86ENfIgaFgABGfM75tD5sHXExTTNV4OxH48",
+          "mode": "list",
+          "cachedResultName": "Finance Data",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cof5e8-Z86ENfIgaFgABGfM75tD5sHXExTTNV4OxH48/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1432028694,
+          "mode": "list",
+          "cachedResultName": "invoices",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1cof5e8-Z86ENfIgaFgABGfM75tD5sHXExTTNV4OxH48/edit#gid=1432028694"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "invoice_id": "={{ $('Merge Invoice and Text').item.json.invoice_id }}",
+            "last_reminder_date": "={{ $('Merge Invoice and Text').item.json.today_str }}",
+            "reminder_count": "={{ $('Merge Invoice and Text').item.json.reminder_number }}"
+          },
+          "matchingColumns": [
+            "invoice_id"
+          ],
+          "schema": [
+            {
+              "id": "invoice_id",
+              "displayName": "invoice_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "client",
+              "displayName": "client",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "issue_date",
+              "displayName": "issue_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "due_date",
+              "displayName": "due_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "amount",
+              "displayName": "amount",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "paid_date",
+              "displayName": "paid_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "client_email",
+              "displayName": "client_email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_reminder_date",
+              "displayName": "last_reminder_date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "reminder_count",
+              "displayName": "reminder_count",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1616,
+        -160
+      ],
+      "id": "884b34b2-fe31-4d85-82e1-11ad9531ef44",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "MiBzFZ0B8TB7ywdR",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get row(s) in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get row(s) in sheet": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Merge Invoice and Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send message and wait for response": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Invoice and Text": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Send message and wait for response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "40015f9f-2088-452b-b02a-394dbc274c2f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "fa56b8a9baff53d6cb7c6d76a44faeb1c5bbb12489ea9429403bf911ea3a9569"
+  },
+  "nodeGroups": [],
+  "id": "ucPgmHyTUalA9OyG",
+  "tags": []
+}
