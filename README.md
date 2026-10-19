@@ -75,6 +75,7 @@ The code node is in `code/filter_overdue_invoices.js` and the prompt in `prompts
 
 ## Notes and limitations
 
+- In the exported workflow, both the approval email and the client email go to the same test address. For real use, set the To field of the client email node to the client_email column.
 - There is no failure alert yet. If the workflow fails after the retries, nothing notifies the user (a separate n8n Error Trigger workflow would add this).
 - Runs on local n8n, so it only works while n8n is running. Approval links point to `localhost`, so they must be opened on the same machine.
 - n8n's Python code node was unavailable in the local setup (no task runner), so the logic is in JavaScript.
