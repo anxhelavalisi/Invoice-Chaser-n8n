@@ -84,3 +84,7 @@ The code node is in `code/filter_overdue_invoices.js` and the prompt in `prompts
 ## Stack
 
 n8n (self-hosted), Google Sheets, Gmail API, Groq (LLM), JavaScript.
+
+## Screenshots
+
+![Workflow](screenshots/workflow.png)
